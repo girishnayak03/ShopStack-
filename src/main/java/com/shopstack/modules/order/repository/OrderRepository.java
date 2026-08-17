@@ -26,4 +26,20 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     @Query("SELECT DISTINCT o FROM Order o JOIN o.items i JOIN i.product p WHERE p.vendorId = :vendorId ORDER BY o.createdAt DESC")
     List<Order> findByVendorId(@Param("vendorId") Long vendorId);
-}
+
+    @Query("SELECT DISTINCT o FROM Order o JOIN o.items i JOIN i.product p " +
+           "WHERE p.vendorId = :vendorId AND o.createdAt BETWEEN :start AND :end " +
+           "AND o.status NOT IN ('CANCELLED', 'FAILED', 'PENDING')")
+    List<Order> findQualifyingOrdersByVendorIdAndDateRange(
+            @Param("vendorId") Long vendorId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    @Query("SELECT COUNT(DISTINCT o.id) FROM Order o JOIN o.items i JOIN i.product p " +
+           "WHERE p.vendorId = :vendorId AND o.user.id = :userId AND o.createdAt < :before " +
+           "AND o.status NOT IN ('CANCELLED', 'FAILED', 'PENDING')")
+    long countQualifyingOrdersByVendorAndUserBefore(
+            @Param("vendorId") Long vendorId,
+            @Param("userId") UUID userId,
+            @Param("before") LocalDateTime before);
+}

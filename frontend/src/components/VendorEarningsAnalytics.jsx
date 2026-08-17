@@ -13,28 +13,6 @@ import {
   Legend,
 } from "recharts";
 
-/**
- * VendorEarningsAnalytics
- *
- * Drop-in tab for VendorPortal.jsx, matching the same self-contained
- * data-fetching pattern as the rest of the file (e.g. loadVendorProfile).
- *
- * Uses api.vendor.getEarnings(vendorId, range) — matching the structured
- * style of your other calls (api.vendor.getProfile(), api.vendor.uploadDocument()).
- * You'll need to add a getEarnings method to the `vendor` section of your
- * api.js file if it isn't there yet — see the note at the bottom of this file.
- *
- * Expects a response shaped like:
- * {
- *   "totalEarnings": 45000,
- *   "netPayout": 40500,
- *   "avgOrderValue": 1200,
- *   "totalOrders": 38,
- *   "trend": [{ "label": "Jul 1", "earnings": 3200 }],
- *   "topProducts": [{ "productName": "Wireless Mouse", "revenue": 8000, "unitsSold": 40 }]
- * }
- */
-
 const RANGE_OPTIONS = [
   { label: "Last 30 days", value: "30d" },
   { label: "Last 90 days", value: "90d" },
@@ -71,6 +49,11 @@ export default function VendorEarningsAnalytics({ vendorId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Persistent Module States
+  const [customerInsights, setCustomerInsights] = useState(null);
+  const [payouts, setPayouts] = useState([]);
+  const [topProducts, setTopProducts] = useState([]);
+
   // Ledger States
   const [ledger, setLedger] = useState([]);
   const [ledgerPage, setLedgerPage] = useState(0);
@@ -82,20 +65,87 @@ export default function VendorEarningsAnalytics({ vendorId }) {
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchEarnings() {
+    async function fetchAllAnalytics() {
       setLoading(true);
       setError(null);
       try {
-        const response = await api.vendor.getEarnings(vendorId, range);
-        if (!cancelled) setData(response);
+        // Calculate date range
+        const endDate = new Date().toISOString().split("T")[0];
+        const startDateObj = new Date();
+        if (range === "90d") startDateObj.setDate(startDateObj.getDate() - 90);
+        else if (range === "1y") startDateObj.setFullYear(startDateObj.getFullYear() - 1);
+        else startDateObj.setDate(startDateObj.getDate() - 30);
+        const startDate = startDateObj.toISOString().split("T")[0];
+
+        // 1. Fetch persistent sales summary from PostgreSQL
+        let salesRes;
+        try {
+          salesRes = await api.vendor.getPersistentSalesAnalytics(vendorId, startDate, endDate);
+        } catch (e) {
+          console.warn("Persistent sales summary endpoint fallback", e);
+        }
+
+        // 2. Fetch top products
+        let prods = [];
+        try {
+          prods = await api.vendor.getTopProducts(vendorId, startDate, endDate);
+        } catch (e) {
+          console.warn("Persistent top products endpoint fallback", e);
+        }
+
+        // 3. Fetch customer insights
+        let insights = null;
+        try {
+          insights = await api.vendor.getCustomerInsights(vendorId, startDate, endDate);
+        } catch (e) {
+          console.warn("Persistent customer insights endpoint fallback", e);
+        }
+
+        // 4. Fetch payouts
+        let payoutList = [];
+        try {
+          const pRes = await api.vendor.getPayouts(vendorId);
+          payoutList = pRes?.content || pRes?.data?.content || pRes || [];
+        } catch (e) {
+          console.warn("Vendor payouts endpoint error", e);
+        }
+
+        if (!cancelled) {
+          if (salesRes && salesRes.dailySummaries) {
+            const trend = (salesRes.dailySummaries || []).map((s) => ({
+              label: s.summaryDate,
+              earnings: s.netPayout,
+              gross: s.grossRevenue,
+            }));
+
+            setData({
+              grossSales: salesRes.grossRevenue,
+              platformCommission: salesRes.commissionDeducted,
+              refundReversalAmount: salesRes.refundsAmount,
+              netVendorEarnings: salesRes.netPayout,
+              totalOrders: salesRes.totalOrders,
+              totalUnitsSold: salesRes.totalUnitsSold,
+              trend,
+              topProducts: prods.length > 0 ? prods : [],
+            });
+          } else {
+            // Fallback to legacy report service
+            const fallbackRes = await api.vendor.getEarnings(vendorId, range);
+            setData(fallbackRes);
+          }
+
+          if (prods.length > 0) setTopProducts(prods);
+          if (insights) setCustomerInsights(insights);
+          if (payoutList) setPayouts(payoutList);
+        }
       } catch (err) {
-        if (!cancelled) setError(err.message || "Failed to load earnings");
+        if (!cancelled) setError(err.message || "Failed to load analytics");
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
-    if (vendorId) fetchEarnings();
+    if (vendorId) fetchAllAnalytics();
     return () => {
       cancelled = true;
     };
@@ -107,32 +157,25 @@ export default function VendorEarningsAnalytics({ vendorId }) {
     async function fetchLedger() {
       setLedgerLoading(true);
       try {
-       const params = {
-  page: 0,
-  size: 100,
-};
+        const params = { page: 0, size: 100 };
+        const response = await api.vendor.getCommissionLedger(params);
 
-const response = await api.vendor.getCommissionLedger(params);
+        if (!cancelled) {
+          const allLedger = response.content || response.data?.content || [];
+          const filteredLedger = allLedger.filter((row) => {
+            const matchesType =
+              !filterType ||
+              row.transactionType?.toUpperCase() === filterType.toUpperCase();
+            const matchesOrder =
+              !filterOrderId.trim() ||
+              row.orderId?.toLowerCase().includes(filterOrderId.trim().toLowerCase());
+            return matchesType && matchesOrder;
+          });
 
-if (!cancelled) {
-  const allLedger = response.content || response.data?.content || [];
-
-  const filteredLedger = allLedger.filter((row) => {
-    const matchesType =
-      !filterType ||
-      row.transactionType?.toUpperCase() === filterType.toUpperCase();
-
-    const matchesOrder =
-      !filterOrderId.trim() ||
-      row.orderId?.toLowerCase().includes(filterOrderId.trim().toLowerCase());
-
-    return matchesType && matchesOrder;
-  });
-
-  setLedger(filteredLedger);
-  setLedgerTotalPages(1);
-  setLedgerPage(0);
-}
+          setLedger(filteredLedger);
+          setLedgerTotalPages(1);
+          setLedgerPage(0);
+        }
       } catch (err) {
         console.error("Failed to fetch ledger", err);
       } finally {
@@ -147,12 +190,28 @@ if (!cancelled) {
   }, [ledgerPage, filterType, filterOrderId]);
 
   const trendData = useMemo(() => data?.trend ?? [], [data]);
-  const topProducts = useMemo(() => data?.topProducts ?? [], [data]);
+  const displayTopProducts = useMemo(() => (topProducts.length > 0 ? topProducts : data?.topProducts ?? []), [topProducts, data]);
+
+  const renderPayoutBadge = (status) => {
+    switch (status) {
+      case "COMPLETED":
+        return <span className="badge badge-active">Completed</span>;
+      case "PROCESSING":
+        return <span className="badge badge-pending">Processing</span>;
+      case "PENDING":
+        return <span className="badge badge-pending">Pending</span>;
+      case "FAILED":
+      case "CANCELLED":
+        return <span className="badge badge-rejected">{status}</span>;
+      default:
+        return <span className="badge">{status}</span>;
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
-        <h3 style={{ fontFamily: "var(--font-heading)", fontWeight: 700 }}>Earnings Analytics</h3>
+        <h3 style={{ fontFamily: "var(--font-heading)", fontWeight: 700 }}>Persistent Analytics &amp; Performance</h3>
         <div style={{ display: "flex", gap: "0.5rem" }}>
           {RANGE_OPTIONS.map((opt) => (
             <button
@@ -170,49 +229,75 @@ if (!cancelled) {
       {error && (
         <div className="glass-card" style={{ borderLeft: "4px solid #ef4444", background: "rgba(239,68,68,0.05)" }}>
           <p style={{ fontSize: "0.9rem", color: "#ef4444" }}>
-            Couldn't load earnings data: {error}
+            Couldn't load analytics data: {error}
           </p>
         </div>
       )}
 
       {loading ? (
         <div className="stats-grid">
-          {[...Array(3)].map((_, i) => (
+          {[...Array(4)].map((_, i) => (
             <div key={i} className="glass-card stat-card" style={{ opacity: 0.5 }}>
-              <span style={{ color: "var(--text-secondary)" }}>Loading…</span>
+              <span style={{ color: "var(--text-secondary)" }}>Loading persistent analytics…</span>
             </div>
           ))}
         </div>
       ) : (
         data && (
           <>
+            {/* Sales Summary Cards */}
             <div className="stats-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
               <SummaryCard
-                label="Gross Sales"
+                label="Gross Revenue"
                 value={formatCurrency(data.grossSales || data.totalEarnings)}
-                sub={`${data.totalOrders} orders`}
+                sub={`${data.totalOrders || 0} orders (${data.totalUnitsSold || 0} units)`}
               />
               <SummaryCard
-                label="Platform Commission"
+                label="Commission Deducted"
                 value={formatCurrency(data.platformCommission)}
                 accent="#f59e0b"
               />
               <SummaryCard
-                label="Refund Reversals"
+                label="Refunds & Reversals"
                 value={formatCurrency(data.refundReversalAmount)}
                 accent="#ef4444"
               />
               <SummaryCard
-                label="Net Vendor Earnings"
+                label="Net Vendor Payout"
                 value={formatCurrency(data.netVendorEarnings || data.netPayout)}
-                sub="after commission & reversals"
+                sub="after commission & refunds"
                 accent="#10b981"
               />
             </div>
 
+            {/* Customer Insights Cards */}
+            {customerInsights && (
+              <div className="stats-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                <SummaryCard
+                  label="New Customers"
+                  value={customerInsights.newCustomers || 0}
+                  sub="First-time buyers"
+                  accent="#3b82f6"
+                />
+                <SummaryCard
+                  label="Repeat Customers"
+                  value={customerInsights.repeatCustomers || 0}
+                  sub="Returning buyers"
+                  accent="#8b5cf6"
+                />
+                <SummaryCard
+                  label="Average Order Value"
+                  value={formatCurrency(customerInsights.avgOrderValue)}
+                  sub="Per customer order"
+                  accent="#ec4899"
+                />
+              </div>
+            )}
+
+            {/* Daily Trend Chart */}
             <div className="glass-card">
               <h4 style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "1rem" }}>
-                Earnings over time
+                Persistent Daily Earnings Trend (PostgreSQL)
               </h4>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={trendData}>
@@ -224,8 +309,16 @@ if (!cancelled) {
                   <Line
                     type="monotone"
                     dataKey="earnings"
-                    name="Earnings"
+                    name="Net Payout"
                     stroke="#10b981"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="gross"
+                    name="Gross Revenue"
+                    stroke="#3b82f6"
                     strokeWidth={2}
                     dot={false}
                   />
@@ -233,12 +326,13 @@ if (!cancelled) {
               </ResponsiveContainer>
             </div>
 
+            {/* Product Performance Chart */}
             <div className="glass-card">
               <h4 style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "1rem" }}>
-                Top products by revenue
+                Persistent Product Performance (Revenue &amp; Sales)
               </h4>
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={topProducts} layout="vertical">
+                <BarChart data={displayTopProducts} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={(v) => `₹${v / 1000}k`} />
                   <YAxis type="category" dataKey="productName" tick={{ fontSize: 12 }} width={140} />
@@ -248,10 +342,54 @@ if (!cancelled) {
               </ResponsiveContainer>
             </div>
 
+            {/* Vendor Payout History */}
+            <div className="glass-card">
+              <h4 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>
+                Vendor Settlements &amp; Payout History
+              </h4>
+              <div className="table-container" style={{ width: "100%", overflowX: "auto" }}>
+                <table className="custom-table" style={{ fontSize: "0.85rem", width: "100%", minWidth: "900px" }}>
+                  <thead>
+                    <tr>
+                      <th>Payout ID</th>
+                      <th>Period</th>
+                      <th>Total Sales</th>
+                      <th>Commission</th>
+                      <th>Net Payable</th>
+                      <th>Status</th>
+                      <th>Reference</th>
+                      <th>Processed Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payouts.map((p) => (
+                      <tr key={p.payoutId}>
+                        <td>#{p.payoutId}</td>
+                        <td>{p.payoutPeriodStart} to {p.payoutPeriodEnd}</td>
+                        <td style={{ fontWeight: 600 }}>{formatCurrency(p.totalSales)}</td>
+                        <td style={{ color: "#f59e0b" }}>{formatCurrency(p.commissionAmount)}</td>
+                        <td style={{ color: "#10b981", fontWeight: 700 }}>{formatCurrency(p.netAmount)}</td>
+                        <td>{renderPayoutBadge(p.status)}</td>
+                        <td>{p.transactionRef || "N/A"}</td>
+                        <td>{p.processedAt ? new Date(p.processedAt).toLocaleDateString() : "Pending"}</td>
+                      </tr>
+                    ))}
+                    {payouts.length === 0 && (
+                      <tr>
+                        <td colSpan="8" style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>
+                          No payout settlement records generated yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Commission Ledger Table */}
             <div className="glass-card">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" }}>
                 <h4 style={{ fontSize: "1.1rem", fontWeight: 700 }}>Commission &amp; Earnings Ledger</h4>
-                
                 <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
                   <select
                     className="form-input"
@@ -263,7 +401,6 @@ if (!cancelled) {
                     <option value="COMMISSION">Commission</option>
                     <option value="REFUND_REVERSAL">Refund Reversal</option>
                   </select>
-                  
                   <input
                     type="text"
                     placeholder="Filter Order ID"
@@ -280,8 +417,8 @@ if (!cancelled) {
                   <div className="spinner"></div>
                 </div>
               ) : (
-                <div className="table-container" style={{ width: "100%", overflowX: "auto",}}>
-                  <table className="custom-table" style={{ fontSize: "0.85rem" , width: "100%", minWidth: "1100px",}}>
+                <div className="table-container" style={{ width: "100%", overflowX: "auto" }}>
+                  <table className="custom-table" style={{ fontSize: "0.85rem", width: "100%", minWidth: "1100px" }}>
                     <thead>
                       <tr>
                         <th>Date</th>
@@ -299,8 +436,8 @@ if (!cancelled) {
                       {ledger.map((row) => (
                         <tr key={row.id}>
                           <td>{new Date(row.createdAt).toLocaleDateString()}</td>
-                          <td><span title={row.orderId}>#{row.orderId.substring(0, 8)}...</span></td>
-                          <td><span title={row.productId}>#{row.productId.substring(0, 8)}...</span></td>
+                          <td><span title={row.orderId}>#{row.orderId ? row.orderId.substring(0, 8) : ""}...</span></td>
+                          <td><span title={row.productId}>#{row.productId ? row.productId.substring(0, 8) : ""}...</span></td>
                           <td style={{ fontWeight: 600 }}>{formatCurrency(row.grossAmount)}</td>
                           <td>{row.commissionRate}%</td>
                           <td style={{ color: row.commissionAmount < 0 ? "#ef4444" : "#f59e0b", fontWeight: 600 }}>
@@ -309,26 +446,20 @@ if (!cancelled) {
                           <td style={{ color: row.vendorAmount < 0 ? "#ef4444" : "#10b981", fontWeight: 600 }}>
                             {formatCurrency(row.vendorAmount)}
                           </td>
-                          <td style={{ whiteSpace: "nowrap"}}>
+                          <td>
                             <span className="badge" style={{
-                              display: "inline-block",
-                              position: "static",
                               background: row.transactionType === "COMMISSION" ? "rgba(59, 130, 246, 0.15)" : "rgba(239, 68, 68, 0.15)",
                               color: row.transactionType === "COMMISSION" ? "#3b82f6" : "#ef4444",
                               fontSize: "0.75rem",
-                              whiteSpace: "nowrap"
                             }}>
                               {row.transactionType}
                             </span>
                           </td>
-                          <td style={{ whiteSpace: "nowrap"}}>
+                          <td>
                             <span className="badge" style={{
-                              display: "inline-block",
-                              position: "static",
                               background: row.status === "CONFIRMED" ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)",
                               color: row.status === "CONFIRMED" ? "#10b981" : "#f59e0b",
                               fontSize: "0.75rem",
-                              whiteSpace: "nowrap",
                             }}>
                               {row.status}
                             </span>
@@ -346,31 +477,6 @@ if (!cancelled) {
                   </table>
                 </div>
               )}
-
-              {/* Pagination */}
-              {ledgerTotalPages > 1 && (
-                <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginTop: "1.25rem" }}>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
-                    disabled={ledgerPage === 0}
-                    onClick={() => setLedgerPage(prev => prev - 1)}
-                  >
-                    Previous
-                  </button>
-                  <span style={{ display: "flex", alignItems: "center", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-                    Page {ledgerPage + 1} of {ledgerTotalPages}
-                  </span>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
-                    disabled={ledgerPage >= ledgerTotalPages - 1}
-                    onClick={() => setLedgerPage(prev => prev + 1)}
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
             </div>
           </>
         )
@@ -378,14 +484,3 @@ if (!cancelled) {
     </div>
   );
 }
-
-/*
- * NOTE: add this to the `vendor` section of your api.js, alongside
- * getProfile / register / uploadDocument:
- *
- *   getEarnings: (vendorId, range) =>
- *     request(`/api/vendor/${vendorId}/earnings?range=${range}`, { method: 'GET' }),
- *
- * Adjust the request helper call to match however getProfile() is
- * implemented in your actual api.js (fetch vs axios wrapper).
- */

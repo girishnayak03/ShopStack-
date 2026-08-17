@@ -25,6 +25,8 @@ public class UpdateProductRequest {
 
     private String imageUrl;
 
+    private org.springframework.web.multipart.MultipartFile image;
+
     private String features;
 
     @DecimalMin("0.0")

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import AvailableCoupons from './AvailableCoupons';
 
-export default function CustomerPortal({ user, cart, setCart, addToast }) {
+export default function CustomerPortal({ user, cart, setCart, addToast , fallbackProducts}) {
   const [activeTab, setActiveTab] = useState('shop'); // 'shop' or 'profile'
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -30,26 +30,28 @@ export default function CustomerPortal({ user, cart, setCart, addToast }) {
   const [newComment, setNewComment] = useState('');
   const [reviewLoading, setReviewLoading] = useState(false);
 
-  useEffect(() => {
-    loadShopData();
-    if (user && user.role === 'CUSTOMER') {
-      loadProfileData();
-    }
-  }, [user]);
+ useEffect(() => {
+  if (Array.isArray(fallbackProducts)) {
+    setProducts(fallbackProducts);
+  }
+
+  if (user && user.role === 'CUSTOMER') {
+    loadProfileData();
+  }
+}, [user, fallbackProducts]);
 
   const loadShopData = async () => {
-    setLoading(true);
-    try {
-      const activeProds = await api.products.browseActive();
-      setProducts(activeProds || []);
-      const allCats = await api.categories.listAll();
-      setCategories(allCats || []);
-    } catch (err) {
-      addToast('Failed to load products or categories', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+  setLoading(true);
+
+  try {
+    const allCats = await api.categories.listAll();
+    setCategories(allCats || []);
+  } catch (err) {
+    addToast('Failed to load categories', 'error');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const loadProfileData = async () => {
     try {

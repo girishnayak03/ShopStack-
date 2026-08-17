@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback} from 'react';
 import { Sun, Moon } from 'lucide-react';
 import { api, tokenStorage } from './api';
 import AuthPortal from './components/AuthPortal';
@@ -14,6 +14,7 @@ import CheckoutPortal from './components/CheckoutPortal';
 import InventoryManagementPage from './components/InventoryManagementPage';
 import ReturnRefundPage from './components/ReturnRefundPage';
 import WarehousePortal from './components/WarehousePortal';
+
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -78,7 +79,7 @@ export default function App() {
     initSession();
 
     // Load cart from localStorage
-    const savedCart = localStorage.getItem('shopstack_cart');
+    const savedCart = sessionStorage.getItem('shopstack_cart');
     if (savedCart) {
       try {
         setCart(JSON.parse(savedCart));
@@ -88,7 +89,7 @@ export default function App() {
     }
 
     // Load wishlist from localStorage
-    const savedWishlist = localStorage.getItem('shopstack_wishlist');
+    const savedWishlist = sessionStorage.getItem('shopstack_wishlist');
     if (savedWishlist) {
       try {
         setWishlist(JSON.parse(savedWishlist));
@@ -114,7 +115,7 @@ export default function App() {
       // Extract just the product IDs
       const productIds = wishlistItems.map(item => item.product?.id || item.productId).filter(Boolean);
       setWishlist(productIds);
-      localStorage.setItem('shopstack_wishlist', JSON.stringify(productIds));
+      sessionStorage.setItem('shopstack_wishlist', JSON.stringify(productIds));
     } catch (err) {
       console.error('Failed to load wishlist from backend:', err);
     }
@@ -149,24 +150,26 @@ export default function App() {
     loadProducts();
   }, []);
 
-  // Save cart to localStorage
+  // Save cart to sessionStorage
   useEffect(() => {
-    localStorage.setItem('shopstack_cart', JSON.stringify(cart));
+    sessionStorage.setItem('shopstack_cart', JSON.stringify(cart));
   }, [cart]);
 
-  // Save wishlist to localStorage
+  // Save wishlist to sessionStorage
   useEffect(() => {
-    localStorage.setItem('shopstack_wishlist', JSON.stringify(wishlist));
+    sessionStorage.setItem('shopstack_wishlist', JSON.stringify(wishlist));
   }, [wishlist]);
 
   // Toast notifications helper
-  const addToast = (message, type = 'info') => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
-  };
+  const addToast = useCallback((message, type = 'info') => {
+  const id = Date.now();
+
+  setToasts((prev) => [...prev, { id, message, type }]);
+
+  setTimeout(() => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, 4000);
+}, []);
 
   const handleSignOut = () => {
     tokenStorage.clearToken();

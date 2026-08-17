@@ -18,6 +18,8 @@ import com.shopstack.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
+import com.shopstack.modules.customer.repository.CustomerRepository;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -28,6 +30,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CheckoutService {
 
     private final CartRepository cartRepository;
@@ -38,6 +41,8 @@ public class CheckoutService {
     private final CouponService couponService;
     private final com.shopstack.modules.inventory.service.InventoryService inventoryService;
     private final com.shopstack.modules.notification.service.NotificationService notificationService;
+    //private final EmailService emailService;
+    private final CustomerRepository customerRepository;
 
     @Transactional
     public Map<String, Object> processCheckout(Map<String, Object> checkoutRequest) {
@@ -167,7 +172,7 @@ public class CheckoutService {
             }
         }
 
-        // Send Order Created Notification
+       // Send Order Placed Notification — in-app only
         try {
             notificationService.sendNotification(
                 com.shopstack.modules.notification.dto.SendNotificationRequest.builder()
@@ -176,11 +181,13 @@ public class CheckoutService {
                     .type(com.shopstack.modules.notification.entity.NotificationType.ORDER_UPDATE)
                     .channel(com.shopstack.modules.notification.entity.NotificationChannel.IN_APP)
                     .title("Order Placed")
-                    .message("Your order #" + order.getId() + " has been placed. Status: " + order.getStatus())
+                    .message("Your ShopStack order #" + order.getId() + " has been placed successfully. Order Status: " + order.getStatus())
                     .build()
             );
-        } catch (Exception ignored) {}
-
+        } catch (Exception e) {
+            log.error("Failed to send order placed notification for order {}", order.getId(), e);
+        }
+        
         if (appliedCouponId != null) {
             couponService.recordCouponUsage(appliedCouponId, targetUserId, order.getId(), discountApplied);
         }

@@ -125,6 +125,7 @@ const [discountDrafts, setDiscountDrafts] = useState({});
     }
   };
 
+ 
   const handleOnboarding = async (e) => {
     e.preventDefault();
     if (!businessName || !businessEmail || !businessPhone) {
@@ -521,7 +522,7 @@ const [discountDrafts, setDiscountDrafts] = useState({});
 
   // --- RENDERING FULL VENDOR DASHBOARD ---
   return (
-    <div style={{ textAlign: 'left' }}>
+    <div className="vendor-portal-responsive" style={{ textAlign: 'left' }}>
       
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '2rem' }}>
@@ -791,13 +792,61 @@ const [discountDrafts, setDiscountDrafts] = useState({});
       <AvailabilityBadge stockQty={stockDrafts[prod.id] ?? prod.stockQuantity} />
     </td>
 
-    <td>
-      {prod.approvalStatus === 'APPROVED' && <span className="badge badge-active">Approved</span>}
-      {prod.approvalStatus === 'PENDING' && <span className="badge badge-pending">Pending</span>}
-      {prod.approvalStatus === 'REJECTED' && (
-        <span className="badge badge-rejected">{prod.rejectionReason}</span>
-      )}
-    </td>
+   <td>
+  {prod.approvalStatus === 'APPROVED' && (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '4px 10px',
+        borderRadius: '999px',
+        fontSize: '12px',
+        fontWeight: 700,
+        backgroundColor: 'rgba(34, 197, 94, 0.15)',
+        color: '#22c55e',
+        border: '1px solid rgba(34, 197, 94, 0.4)',
+        whiteSpace: 'nowrap'
+      }}
+    >
+      Approved
+    </span>
+  )}
+
+  {prod.approvalStatus === 'PENDING' && (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '4px 10px',
+        borderRadius: '999px',
+        fontSize: '12px',
+        fontWeight: 700,
+        backgroundColor: 'rgba(245, 158, 11, 0.15)',
+        color: '#f59e0b',
+        border: '1px solid rgba(245, 158, 11, 0.4)',
+        whiteSpace: 'nowrap'
+      }}
+    >
+      Pending
+    </span>
+  )}
+
+  {prod.approvalStatus === 'REJECTED' && (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '4px 10px',
+        borderRadius: '999px',
+        fontSize: '12px',
+        fontWeight: 700,
+        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+        color: '#ef4444',
+        border: '1px solid rgba(239, 68, 68, 0.4)',
+        whiteSpace: 'nowrap'
+      }}
+    >
+      {prod.rejectionReason || 'Rejected'}
+    </span>
+  )}
+</td>
 
     <td>
       {prod.active ? (
@@ -1006,13 +1055,64 @@ const [discountDrafts, setDiscountDrafts] = useState({});
                       <td>{ret.refundType}</td>
                       <td>{ret.notes || 'No remarks'}</td>
                       <td>
-                        <span className="badge" style={{
-                          background: ret.status === 'REFUND_COMPLETED' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                          color: ret.status === 'REFUND_COMPLETED' ? '#10b981' : '#f59e0b'
-                        }}>
-                          {ret.status}
-                        </span>
-                      </td>
+  <span
+    style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '5px 10px',
+      borderRadius: '999px',
+      fontSize: '0.72rem',
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      whiteSpace: 'nowrap',
+      background:
+        ret.status === 'REFUND_COMPLETED'
+          ? 'rgba(16, 185, 129, 0.15)'
+          : ret.status === 'REFUND_INITIATED'
+          ? 'rgba(168, 85, 247, 0.15)'
+          : ret.status === 'RETURN_REQUESTED'
+          ? 'rgba(245, 158, 11, 0.15)'
+          : ret.status === 'RETURN_APPROVED'
+          ? 'rgba(59, 130, 246, 0.15)'
+          : ret.status === 'RETURN_PICKED'
+          ? 'rgba(99, 102, 241, 0.15)'
+          : ret.status === 'RETURN_RECEIVED'
+          ? 'rgba(6, 182, 212, 0.15)'
+          : 'rgba(107, 114, 128, 0.15)',
+      color:
+        ret.status === 'REFUND_COMPLETED'
+          ? '#10b981'
+          : ret.status === 'REFUND_INITIATED'
+          ? '#a855f7'
+          : ret.status === 'RETURN_REQUESTED'
+          ? '#f59e0b'
+          : ret.status === 'RETURN_APPROVED'
+          ? '#3b82f6'
+          : ret.status === 'RETURN_PICKED'
+          ? '#6366f1'
+          : ret.status === 'RETURN_RECEIVED'
+          ? '#06b6d4'
+          : '#9ca3af',
+      border:
+        ret.status === 'REFUND_COMPLETED'
+          ? '1px solid rgba(16, 185, 129, 0.4)'
+          : ret.status === 'REFUND_INITIATED'
+          ? '1px solid rgba(168, 85, 247, 0.4)'
+          : ret.status === 'RETURN_REQUESTED'
+          ? '1px solid rgba(245, 158, 11, 0.4)'
+          : ret.status === 'RETURN_APPROVED'
+          ? '1px solid rgba(59, 130, 246, 0.4)'
+          : ret.status === 'RETURN_PICKED'
+          ? '1px solid rgba(99, 102, 241, 0.4)'
+          : ret.status === 'RETURN_RECEIVED'
+          ? '1px solid rgba(6, 182, 212, 0.4)'
+          : '1px solid rgba(107, 114, 128, 0.4)'
+    }}
+  >
+    {String(ret.status || 'UNKNOWN').replace(/_/g, ' ')}
+  </span>
+</td>
                       <td>
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                           {ret.status === 'RETURN_REQUESTED' && (

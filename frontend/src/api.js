@@ -6,9 +6,9 @@
 const BASE_URL = ''; // Proxied via Vite config to avoid CORS & hardcoded URL issues
 
 export const tokenStorage = {
-  getToken: () => localStorage.getItem('shopstack_token'),
-  setToken: (token) => localStorage.setItem('shopstack_token', token),
-  clearToken: () => localStorage.removeItem('shopstack_token'),
+  getToken: () => sessionStorage.getItem('shopstack_token'),
+  setToken: (token) => sessionStorage.setItem('shopstack_token', token),
+  clearToken: () => sessionStorage.removeItem('shopstack_token'),
 };
 
 export const unwrap = (data) => {
@@ -159,7 +159,32 @@ export const api = {
       return apiRequest(url, { method: 'GET' });
     },
     getCommissionSummary: () => apiRequest('/api/v1/vendors/commission/summary', { method: 'GET' }),
+    getPersistentSalesAnalytics: (vendorId, startDate, endDate) => {
+      const path = vendorId ? `/api/v1/vendors/${vendorId}/analytics/sales` : '/api/v1/vendors/me/analytics/sales';
+      const query = startDate && endDate ? `?startDate=${startDate}&endDate=${endDate}` : '';
+      return apiRequest(`${path}${query}`, { method: 'GET' });
+    },
+    getProductPerformance: (vendorId, startDate, endDate) => {
+      const path = vendorId ? `/api/v1/vendors/${vendorId}/analytics/products` : '/api/v1/vendors/me/analytics/products';
+      const query = startDate && endDate ? `?startDate=${startDate}&endDate=${endDate}` : '';
+      return apiRequest(`${path}${query}`, { method: 'GET' });
+    },
+    getTopProducts: (vendorId, startDate, endDate) => {
+      const path = vendorId ? `/api/v1/vendors/${vendorId}/analytics/top-products` : '/api/v1/vendors/me/analytics/top-products';
+      const query = startDate && endDate ? `?startDate=${startDate}&endDate=${endDate}` : '';
+      return apiRequest(`${path}${query}`, { method: 'GET' });
+    },
+    getCustomerInsights: (vendorId, startDate, endDate) => {
+      const path = vendorId ? `/api/v1/vendors/${vendorId}/analytics/customers` : '/api/v1/vendors/me/analytics/customers';
+      const query = startDate && endDate ? `?startDate=${startDate}&endDate=${endDate}` : '';
+      return apiRequest(`${path}${query}`, { method: 'GET' });
+    },
+    getPayouts: (vendorId) => {
+      const path = vendorId ? `/api/v1/vendors/${vendorId}/payouts` : '/api/v1/vendors/me/payouts';
+      return apiRequest(path, { method: 'GET' });
+    },
   },
+
 
   // --- PRODUCT & CATEGORY ENDPOINTS ---
   products: {
@@ -322,10 +347,27 @@ export const api = {
     exportVendorReport: (from, to) => apiRequest(`/admin/reports/vendors/export?from=${from}&to=${to}`, {
       method: 'GET',
     }),
+    // --- NEW: Payouts & Analytics Backfill ---
+    getAllPayouts: (status = '') => apiRequest(`/api/v1/admin/vendor-payouts${status ? `?status=${status}` : ''}`, {
+      method: 'GET',
+    }),
+    createPayout: (payoutData) => apiRequest('/api/v1/admin/vendor-payouts', {
+      method: 'POST',
+      body: payoutData,
+    }),
+    processPayout: (id, processData) => apiRequest(`/api/v1/admin/vendor-payouts/${id}/process`, {
+      method: 'PUT',
+      body: processData,
+    }),
+    backfillVendorAnalytics: (backfillData) => apiRequest('/api/v1/admin/vendor-analytics/backfill', {
+      method: 'POST',
+      body: backfillData,
+    }),
     // --- NEW: System Logs ---
     getSystemLogs: () => apiRequest('/admin/system-logs', {
       method: 'GET',
     }),
+
   },
 
   // --- MODULE 2: CART, CHECKOUT, & PAYMENT ---

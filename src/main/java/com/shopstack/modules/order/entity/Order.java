@@ -38,11 +38,14 @@ public class Order extends BaseEntity {
     @Column(nullable = false)
     private String status; // PENDING, PAID, FAILED, SHIPPED, DELIVERED
 
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+   @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private java.time.LocalDateTime estimatedDelivery;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private java.time.LocalDateTime shippedDate;
+
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private java.time.LocalDateTime deliveredAt;
 
     private String trackingNumber;
 

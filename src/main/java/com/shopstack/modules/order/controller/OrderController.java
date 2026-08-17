@@ -102,6 +102,7 @@ public class OrderController {
                 tracking.put("carrier", shipment.getCarrier() != null ? shipment.getCarrier() : "BlueDart Express");
                 tracking.put("trackingNumber", shipment.getTrackingNumber());
                 tracking.put("estimatedDelivery", shipment.getEstimatedDeliveryDate() != null ? shipment.getEstimatedDeliveryDate() : "");
+                tracking.put("deliveredAt", shipment.getDeliveredAt() != null ? shipment.getDeliveredAt().toString() : "");
                 
                 List<java.util.Map<String, Object>> events = new java.util.ArrayList<>();
                 if (shipment.getTrackingEvents() != null) {

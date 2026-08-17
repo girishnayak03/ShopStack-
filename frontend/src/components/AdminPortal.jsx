@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect} from 'react';
 import { api } from '../api';
 import CouponManagementPage from './CouponManagementPage';
 import ReportDashboard from './ReportDashboard';
@@ -698,19 +698,32 @@ export default function AdminPortal({ user, addToast }) {
                   </thead>
                   <tbody>
                     {customers.map(c => (
-                      <tr key={c.id}>
-                        <td><strong>{c.fullName}</strong></td>
-                        <td>{c.email}</td>
-                        <td>{c.phoneNumber || 'Not provided'}</td>
-                        <td>
-                          {c.active ? (
-                            <span className="badge badge-active">Active</span>
-                          ) : (
-                            <span className="badge badge-suspended">Suspended</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+  <tr key={c.id}>
+    <td><strong>{c.fullName}</strong></td>
+    <td>{c.email}</td>
+    <td>{c.phoneNumber || 'Not provided'}</td>
+    <td>
+  <span
+    style={{
+      display: 'inline-block',
+      padding: '4px 10px',
+      borderRadius: '999px',
+      fontSize: '12px',
+      fontWeight: 700,
+      backgroundColor: c.active
+        ? 'rgba(16, 185, 129, 0.18)'
+        : 'rgba(239, 68, 68, 0.18)',
+      color: c.active ? '#10b981' : '#ef4444',
+      border: `1px solid ${
+        c.active ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)'
+      }`
+    }}
+  >
+    {c.active ? 'ACTIVE' : 'SUSPENDED'}
+  </span>
+</td>
+  </tr>
+))}
                   </tbody>
                 </table>
               </div>

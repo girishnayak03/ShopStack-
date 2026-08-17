@@ -220,7 +220,17 @@ export default function CheckoutPortal({ user, cart, setCart, addToast, onComple
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 380px', gap: '2rem', padding: '2rem' }}>
+    <div
+  className="checkout-responsive-layout"
+  style={{
+    maxWidth: '1200px',
+    margin: '0 auto',
+    display: 'grid',
+    gridTemplateColumns: '1fr 380px',
+    gap: '2rem',
+    padding: '2rem'
+  }}
+>
 
       {/* LEFT COLUMN: Main Flow */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>

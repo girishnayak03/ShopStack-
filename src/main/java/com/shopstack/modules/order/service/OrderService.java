@@ -6,6 +6,8 @@ import com.shopstack.modules.order.entity.OrderItem;
 import com.shopstack.modules.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import com.shopstack.modules.order.dto.OrderStatusUpdate;
 
 import java.util.List;
 import java.util.UUID;
@@ -18,6 +20,8 @@ public class OrderService {
     private final com.shopstack.modules.notification.service.NotificationService notificationService;
     private final com.shopstack.modules.systemlog.service.SystemLogService systemLogService;
     private final CommissionService commissionService;
+    private final SimpMessagingTemplate messagingTemplate;
+    
 
     public List<Order> getAllOrders() {
         return orderRepository.findAll();
@@ -50,6 +54,8 @@ public class OrderService {
         Order order = getOrderById(orderId);
         order.setStatus(status.toUpperCase());
         Order saved = orderRepository.save(order);
+
+        broadcastOrderStatus(saved);
         
         if ("CONFIRMED".equalsIgnoreCase(status)) {
             commissionService.createCommissionLedger(saved);
@@ -64,6 +70,8 @@ public class OrderService {
         Order order = orderRepository.getReferenceById(orderId);
         order.setStatus(String.valueOf(orderStatus));
         Order saved = orderRepository.save(order);
+
+        broadcastOrderStatus(saved);
         
         String status = String.valueOf(orderStatus);
         if ("CONFIRMED".equalsIgnoreCase(status)) {
@@ -78,6 +86,7 @@ public class OrderService {
         order.setStatus("CONFIRMED");
         Order saved = orderRepository.save(order);
         
+        broadcastOrderStatus(saved);
         commissionService.createCommissionLedger(saved);
         
         try {
@@ -101,6 +110,8 @@ public class OrderService {
         Order order = getOrderById(orderId);
         order.setStatus("CANCELLED");
         Order saved = orderRepository.save(order);
+
+        broadcastOrderStatus(saved);
 
         commissionService.createRefundReversalForOrder(orderId);
 
@@ -131,6 +142,8 @@ public class OrderService {
         order.setStatus("PACKING");
         Order saved = orderRepository.save(order);
 
+        broadcastOrderStatus(saved);
+
         try {
             notificationService.sendNotification(
                 com.shopstack.modules.notification.dto.SendNotificationRequest.builder()
@@ -152,6 +165,8 @@ public class OrderService {
         Order order = getOrderById(orderId);
         order.setStatus("READY_FOR_PICKUP");
         Order saved = orderRepository.save(order);
+
+        broadcastOrderStatus(saved);
 
         try {
             notificationService.sendNotification(
@@ -202,4 +217,28 @@ public class OrderService {
             throw new RuntimeException("Error generating PDF packing slip", e);
         }
     }
+    private void broadcastOrderStatus(Order order) {
+    try {
+        UUID customerId = order.getUser() != null
+                ? order.getUser().getId()
+                : null;
+
+        if (customerId == null) {
+            return;
+        }
+
+        messagingTemplate.convertAndSend(
+                "/topic/orders/" + customerId,
+                new OrderStatusUpdate(
+                        order.getId(),
+                        order.getStatus()
+                )
+        );
+
+    } catch (Exception e) {
+        System.err.println(
+                "Failed to broadcast order status: " + e.getMessage()
+        );
+    }
+}
 }
