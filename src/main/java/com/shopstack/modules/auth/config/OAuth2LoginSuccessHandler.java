@@ -10,6 +10,7 @@ import com.shopstack.modules.user.repository.UserRepository;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
@@ -24,8 +25,8 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private final RoleRepository roleRepository;
     private final JwtService jwtService;
 
-    // change this to your actual frontend URL
-    private static final String FRONTEND_REDIRECT_URL = "http://localhost:5173/oauth2/redirect";
+    @Value("${application.cors.allowed-origins:http://localhost:5173}")
+    private String allowedOrigins;
 
     public OAuth2LoginSuccessHandler(UserRepository userRepository, RoleRepository roleRepository, JwtService jwtService) {
         this.userRepository = userRepository;
@@ -33,8 +34,17 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         this.jwtService = jwtService;
     }
 
+    private String getRedirectUrl() {
+        String primaryOrigin = allowedOrigins.split(",")[0].trim();
+        if (primaryOrigin.endsWith("/")) {
+            primaryOrigin = primaryOrigin.substring(0, primaryOrigin.length() - 1);
+        }
+        return primaryOrigin + "/oauth2/redirect";
+    }
+
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+        String redirectBase = getRedirectUrl();
 
         OAuth2User oauthUser = (OAuth2User) authentication.getPrincipal();
         String email = oauthUser.getAttribute("email");
@@ -43,7 +53,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         String familyName = oauthUser.getAttribute("family_name");
 
         if (email == null) {
-            response.sendRedirect(FRONTEND_REDIRECT_URL + "?error=no_email_from_provider");
+            response.sendRedirect(redirectBase + "?error=no_email_from_provider");
             return;
         }
 
@@ -81,6 +91,6 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         });
 
         String token = jwtService.generateToken(user.getEmail(), user.getRole().getName());
-        response.sendRedirect(FRONTEND_REDIRECT_URL + "?token=" + token);
+        response.sendRedirect(redirectBase + "?token=" + token);
     }
 }

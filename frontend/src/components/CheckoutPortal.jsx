@@ -268,7 +268,7 @@ export default function CheckoutPortal({ user, cart, setCart, addToast, onComple
     src={
       item.image.startsWith('http')
         ? item.image
-        : `http://localhost:8080${item.image}`
+        : `${import.meta.env.VITE_API_BASE_URL || ''}${item.image}`
     }
     alt={item.productName || item.name}
     style={{

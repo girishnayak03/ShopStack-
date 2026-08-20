@@ -100,8 +100,19 @@ export default function OrderList({
     }
 
     const client = new Client({
-      webSocketFactory: () =>
-        new WebSocket('http://localhost:8080/ws'),
+      webSocketFactory: () => {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin;
+        let wsUrl;
+        if (baseUrl.startsWith('https://')) {
+          wsUrl = baseUrl.replace('https://', 'wss://') + '/ws';
+        } else if (baseUrl.startsWith('http://')) {
+          wsUrl = baseUrl.replace('http://', 'ws://') + '/ws';
+        } else {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          wsUrl = `${protocol}//${window.location.host}/ws`;
+        }
+        return new WebSocket(wsUrl);
+      },
 
       reconnectDelay: 5000,
 

@@ -448,7 +448,8 @@ export default function OrderCard({
                     try {
                       const res = await api.orders.getPackingSlip(orderId);
                       if (res && res.pdfPath) {
-                        window.open(`http://localhost:8080${res.pdfPath}`, '_blank');
+                        const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+                        window.open(`${baseUrl}${res.pdfPath}`, '_blank');
                       } else {
                         addToast?.('Failed to get packing slip path', 'error');
                       }
