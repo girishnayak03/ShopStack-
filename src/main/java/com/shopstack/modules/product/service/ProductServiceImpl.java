@@ -20,11 +20,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
+import java.util.Map;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -41,6 +39,7 @@ public class ProductServiceImpl implements ProductService {
     private final UserRepository userRepository;
     private final ProductMapper productMapper;
     private final WishlistItemRepository wishlistItemRepository;
+    private final com.cloudinary.Cloudinary cloudinary;
 
     @Override
     public ProductResponse createProduct(CreateProductRequest request) {
@@ -57,26 +56,13 @@ public class ProductServiceImpl implements ProductService {
 
 try {
     if (request.getImage() != null && !request.getImage().isEmpty()) {
-
-        String fileName = System.currentTimeMillis() + "_"
-                + request.getImage().getOriginalFilename();
-
-        Path uploadPath = Paths.get("uploads/products");
-
-        if (!Files.exists(uploadPath)) {
-            Files.createDirectories(uploadPath);
-        }
-
-        Files.copy(
-                request.getImage().getInputStream(),
-                uploadPath.resolve(fileName),
-                StandardCopyOption.REPLACE_EXISTING
-        );
-
-        product.setImageUrl("/uploads/products/" + fileName);
+        // Upload to Cloudinary
+        Map uploadResult = cloudinary.uploader().upload(request.getImage().getBytes(), ObjectUtils.emptyMap());
+        String url = uploadResult.get("secure_url").toString();
+        product.setImageUrl(url);
     }
-} catch (IOException e) {
-    throw new RuntimeException("Failed to upload image", e);
+} catch (Exception e) {
+    throw new RuntimeException("Failed to upload image to Cloudinary", e);
 }
 
 product.setCategory(category);
